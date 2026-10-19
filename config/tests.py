@@ -64,8 +64,8 @@ class AdminTests(TestCase):
     """Thin slice: Skye's login reaches the Unfold admin."""
 
     def test_logged_in_superuser_reaches_admin(self):
-        User.objects.create_superuser("skye-test", password="test-only-pw")
-        self.client.login(username="skye-test", password="test-only-pw")
+        User.objects.create_superuser("jane-doe", password="test-only-pw")
+        self.client.login(username="jane-doe", password="test-only-pw")
         response = self.client.get("/admin/")
         self.assertEqual(response.status_code, 200)
 
