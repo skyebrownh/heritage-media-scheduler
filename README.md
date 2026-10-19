@@ -53,7 +53,7 @@ Variables on the service:
 | `CSRF_TRUSTED_ORIGINS` | `https://` plus the service's Railway domain |
 | `DATABASE_URL` | a reference to the Postgres service's `DATABASE_URL` |
 
-Create Skye's login once with `railway run` / `railway ssh` running `python manage.py createsuperuser` against production.
+Create Skye's login once with `railway ssh` (a shell inside the running service, so it can reach the private database), then `python manage.py createsuperuser`. Don't use `railway run`: it runs on your Mac, where Railway's private database address doesn't resolve.
 
 ### Test
 
