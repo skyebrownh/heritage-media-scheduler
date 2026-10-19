@@ -32,6 +32,12 @@ uv run --env-file .env python manage.py runserver
 
 Then log in at <http://localhost:8000/admin/>.
 
+### Test
+
+```sh
+uv run --env-file .env python manage.py test
+```
+
 ## Deploy
 
 Production is a Railway service in heritage-media-availability's project, with its own Postgres 18 service. Merging to `main` deploys it, so **every merge goes live**. Railway's config-as-code files are being retired, so there is no `railway.json`: the settings below are entered in the service's Settings page, and they match heritage-media-availability's.
@@ -56,12 +62,6 @@ Variables on the service:
 | `DATABASE_URL` | a reference to the Postgres service's `DATABASE_URL` |
 
 Create Skye's login once with `railway ssh` (a shell inside the running service, so it can reach the private database), then `python manage.py createsuperuser`. Don't use `railway run`: it runs on your Mac, where Railway's private database address doesn't resolve.
-
-### Test
-
-```sh
-uv run --env-file .env python manage.py test
-```
 
 ## How work happens
 
