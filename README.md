@@ -16,11 +16,44 @@ Skye keeps the media team's rulebook (services, slot templates, team rotation, e
 
 ### Install
 
-Added by the first issue that adds code.
+```sh
+uv sync                                  # install the pinned packages
+cp .env.example .env                     # then put a real SECRET_KEY in .env (the file says how)
+createdb heritage_media_scheduler        # the scheduler's own local database
+uv run --env-file .env python manage.py migrate
+uv run --env-file .env python manage.py createsuperuser
+```
 
 ### Run
 
-Added by the first issue that adds code.
+```sh
+uv run --env-file .env python manage.py runserver
+```
+
+Then log in at <http://localhost:8000/admin/>.
+
+## Deploy
+
+Production is a Railway service in heritage-media-availability's project, with its own Postgres 18 service. Railway settings are set in the service's settings page (there is no `railway.toml`):
+
+| Setting | Value |
+| --- | --- |
+| Build command | `python manage.py collectstatic --noinput` |
+| Pre-deploy command | `python manage.py migrate` |
+| Start command | `gunicorn config.wsgi --bind 0.0.0.0:$PORT` |
+| Health check path | `/health/` |
+
+Variables on the service:
+
+| Variable | Value |
+| --- | --- |
+| `SECRET_KEY` | a new random key, never reused from local |
+| `DEBUG` | `false` |
+| `ALLOWED_HOSTS` | the service's Railway domain, plus `healthcheck.railway.app` |
+| `CSRF_TRUSTED_ORIGINS` | `https://` plus the service's Railway domain |
+| `DATABASE_URL` | a reference to the Postgres service's `DATABASE_URL` |
+
+Create Skye's login once with `railway run` / `railway ssh` running `python manage.py createsuperuser` against production.
 
 ### Test
 

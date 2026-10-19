@@ -19,7 +19,11 @@ Decides who serves in HICC's monthly media schedule, from Skye's rulebook, roste
 
 ## Architecture
 
-Added by the first issue that adds code.
+- `config/` is the Django project package (settings, URLs, WSGI). There is no Django app yet; later issues add them.
+- `config/settings.py` is the only settings module. Everything comes from environment variables (see `.env.example`), and `DEBUG=false` switches on the production security settings.
+- `/health/` (`config/views.py`) is the only page without a login. It touches no database and returns plain `ok`.
+- `/` redirects to `/admin/`, the only interface.
+- Static files are served by WhiteNoise; `collectstatic` writes them to the git-ignored `staticfiles/`.
 
 ## Conventions
 
@@ -35,7 +39,7 @@ Added by the first issue that adds code.
 
 ## Commands
 
-- Run locally: added by the first issue that adds code.
+- Run locally: `uv run --env-file .env python manage.py runserver` (setup in README.md)
 - Run tests: `uv run --env-file .env python manage.py test`
 
 Project facts for Skye's personal skills (checks, merge style, whether merging deploys) are in `.claude/workflow.md`; update it with `/setup-project`.
