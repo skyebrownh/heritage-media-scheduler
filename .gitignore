@@ -20,3 +20,6 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# collectstatic output; rebuilt on every deploy
+staticfiles/
