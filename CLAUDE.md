@@ -23,6 +23,7 @@ Decides who serves in HICC's monthly media schedule, from Skye's rulebook, roste
 - `config/settings.py` is the only settings module. Everything comes from environment variables (see `.env.example`), and `DEBUG=false` switches on the production security settings.
 - `/health/` (`config/views.py`) is the only page without a login. It touches no database and returns plain `ok`.
 - `/` redirects to `/admin/`, the only interface.
+- `gunicorn.conf.py` holds the production web server settings, so Railway's start command stays `gunicorn config.wsgi`. The Railway commands live in the service settings (README's Deploy section), not in a file.
 - Static files are served by WhiteNoise; `collectstatic` writes them to the git-ignored `staticfiles/`.
 
 ## Conventions
