@@ -12,7 +12,7 @@ Decides who serves in HICC's monthly media schedule, from Skye's rulebook, roste
 - Django, with the Django admin as the only interface
 - django-unfold for the admin, version pinned
 - Postgres 18, the scheduler's own database (never availability's)
-- Railway, inside heritage-media-availability's Railway project, production only, as its own service
+- Railway, inside the shared "heritage-media" Railway project (availability's, renamed), production only, as its own service
 - gunicorn, with WhiteNoise for static files
 - Django's test runner: `SimpleTestCase` for the engine, `TestCase` for everything that touches the database
 - Approved packages: django, django-unfold, psycopg, gunicorn, whitenoise. Anything else needs approval first. Parsing Docs and calling the availability endpoint use the standard library.

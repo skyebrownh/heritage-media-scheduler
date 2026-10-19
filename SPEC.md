@@ -389,7 +389,7 @@ The model leaves room for: more roles and positions, more teams, more event type
 | Framework | Django | The admin edits every table with little code, and its login protects the schedule page. Skye already knows it from availability. |
 | Admin look | django-unfold, version pinned | The same look and components as availability's admin |
 | Database | Postgres 18, the scheduler's own | Matches availability locally and in production, so backups and snapshot loading work the same way |
-| Hosting | Railway, in heritage-media-availability's Railway project, production only, as its own service with its own Postgres | Everything in one place. The same project allows private networking to availability's endpoint. No per-project fee. |
+| Hosting | Railway, in the shared heritage-media project (availability's project, renamed), production only, as its own service with its own Postgres | Everything in one place. The same project allows private networking to availability's endpoint. No per-project fee. |
 | Serving | gunicorn, with WhiteNoise for static files | Same as availability |
 | Fill algorithm | A hand-written, deterministic greedy picker | Its per-slot decisions can be explained and recorded, which is how the tie report works. No dependency. |
 
@@ -430,7 +430,6 @@ The model leaves room for: more roles and positions, more teams, more event type
 
 ### Open questions
 
-- How Railway environments behave when the scheduler's services are added to availability's project, which has production and staging: whether the scheduler can exist in production only. This is settled in the thin slice. If it can't, the scheduler gets its own Railway project and calls the endpoint over its public URL.
 - The availability endpoint's exact shape and token handling belong to an issue in heritage-media-availability, after its Oct 25 launch.
 - How FL-4 turns workload lean and serves so far into "most room". Settled when Fill is planned, using what `check_history` shows.
 - Whether a Doc downloaded as a web page keeps strikethrough, brackets and the team-count section in a form the importer can read (HI-1, HI-3). Settled by inspecting one real export at the start of the History issue.
@@ -443,3 +442,4 @@ The model leaves room for: more roles and positions, more teams, more event type
 - 2026-10-19: The build order is generate, then live availability, then history and check, then fill. History needs availability's member list to match names against. `check` comes before `fill`, so `check_history` can find gaps in the rules before anything is filled automatically.
 - 2026-10-19: Testing against real months is a report (`check_history`), not part of the test suite, so the suite only ever needs fictional data.
 - 2026-10-19: There's one production environment, with local runs for testing and no staging, because Skye is the only user.
+- 2026-10-19: The scheduler lives in availability's Railway project, in production only, as its own app service with its own Postgres. It was created in the production environment only, with nothing in staging. The project is now named "heritage-media". The thin slice deployed, and the hosted login and styling work.
