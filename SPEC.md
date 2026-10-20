@@ -202,7 +202,7 @@ All tables live in the scheduler's own Postgres. `member_id` is heritage-media-a
 | code | text | Primary key, e.g. `propresenter`, `sound`, `camera_director`, `main_camera_1`, `main_camera_2`, `mobile_camera_3`, `on_call` |
 | name | text | |
 | is_active | boolean | |
-| column | text | The schedule table column it appears in |
+| table_column | text | The schedule table column it appears in (not `column`, a SQL keyword) |
 | display_order | integer | Column order in the schedule table |
 
 ### position

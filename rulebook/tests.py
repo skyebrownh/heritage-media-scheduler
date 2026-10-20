@@ -1,3 +1,6 @@
+import importlib
+
+from django.apps import apps as django_apps
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
@@ -117,9 +120,54 @@ class PositionAdminTests(AdminTestCase):
     def test_rejects_no_roles(self):
         response = self.add_position([])
         self.assertContains(response, "one or two roles")
-        self.assertFalse(Position.objects.exists())
+        self.assertFalse(Position.objects.filter(code="test_position").exists())
 
     def test_rejects_three_roles(self):
         response = self.add_position(["role_a", "role_b", "role_c"])
         self.assertContains(response, "one or two roles")
-        self.assertFalse(Position.objects.exists())
+        self.assertFalse(Position.objects.filter(code="test_position").exists())
+
+
+class SeedTests(TestCase):
+    """RB-3: a data migration adds the codes SPEC.md names."""
+
+    def test_media_roles_are_seeded_in_column_order(self):
+        roles = MediaRole.objects.values_list("code", "table_column", "display_order")
+        self.assertEqual(
+            list(roles),
+            [
+                ("propresenter", "ProPresenter", 1),
+                ("sound", "Sound", 2),
+                ("camera_director", "Director", 3),
+                ("main_camera_1", "Main 1", 4),
+                ("main_camera_2", "Main 2", 5),
+                ("mobile_camera_3", "Mobile 3", 6),
+                ("on_call", "On Call", 7),
+            ],
+        )
+
+    def test_each_role_has_a_single_role_position(self):
+        for role in MediaRole.objects.all():
+            position = Position.objects.get(code=role.code)
+            self.assertEqual(list(position.roles.all()), [role])
+
+    def test_sound_propresenter_shares_two_roles(self):
+        position = Position.objects.get(code="sound_propresenter")
+        self.assertEqual(position.name, "Sound + ProPresenter")
+        self.assertEqual(
+            sorted(r.code for r in position.roles.all()), ["propresenter", "sound"]
+        )
+
+    def test_event_types_are_seeded(self):
+        self.assertEqual(
+            dict(EventType.objects.values_list("code", "name")),
+            {"service": "Service", "prayer": "Prayer", "special_event": "Special event"},
+        )
+
+    def test_running_the_seed_again_adds_no_duplicates(self):
+        before = (MediaRole.objects.count(), Position.objects.count(), EventType.objects.count())
+        migration = importlib.import_module("rulebook.migrations.0002_seed_rulebook_codes")
+        migration.seed(django_apps, None)
+        after = (MediaRole.objects.count(), Position.objects.count(), EventType.objects.count())
+        self.assertEqual(before, after)
+        self.assertEqual(Position.objects.get(code="sound_propresenter").roles.count(), 2)
