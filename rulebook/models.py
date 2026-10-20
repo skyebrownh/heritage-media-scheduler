@@ -7,7 +7,7 @@ class MediaRole(models.Model):
     code = models.CharField(max_length=50, primary_key=True)
     name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
-    # Not called `column`, which is a SQL keyword.
+    # RB-3: not called `column`, which is a SQL keyword.
     table_column = models.CharField(max_length=50)
     display_order = models.PositiveIntegerField()
 
@@ -19,7 +19,7 @@ class MediaRole(models.Model):
 
 
 class EventType(models.Model):
-    """What kind of event it is: a service, prayer or special event."""
+    """RB-3: what kind of event it is: a service, prayer or special event."""
 
     code = models.CharField(max_length=50, primary_key=True)
     name = models.CharField(max_length=100)

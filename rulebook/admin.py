@@ -6,7 +6,7 @@ from rulebook.models import EventType, MediaRole, Position
 
 
 class CodeReadOnlyOnceSaved(ModelAdmin):
-    """Other tables will refer to a row by its code, so changing it would orphan them."""
+    """RB-3: other tables will refer to a row by its code, so changing it would orphan them."""
 
     def get_readonly_fields(self, request, obj=None):
         return (*super().get_readonly_fields(request, obj), *(["code"] if obj else []))
@@ -29,7 +29,7 @@ class PositionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Skip Django's generic "required" message so clean_roles gives one message
+        # RB-3: skip Django's generic "required" message so clean_roles gives one message
         # for both too few and too many.
         self.fields["roles"].required = False
 

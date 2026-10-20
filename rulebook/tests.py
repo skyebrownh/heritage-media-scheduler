@@ -9,7 +9,7 @@ from rulebook.models import EventType, MediaRole, Position
 
 
 class AdminTestCase(TestCase):
-    """Logs in a fictional superuser, since the admin is the only interface."""
+    """RB-3: logs in a fictional superuser, since the admin is the only interface."""
 
     def setUp(self):
         User.objects.create_superuser("jane", password="pw-for-tests")
