@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
-from rulebook.models import EventType, MediaRole
+from rulebook.models import EventType, MediaRole, Position
 
 
 class AdminTestCase(TestCase):
@@ -70,3 +70,56 @@ class MediaRoleAdminTests(AdminTestCase):
         response = self.client.get(reverse("admin:rulebook_mediarole_changelist"))
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response["Location"])
+
+
+class EventTypeAdminTests(AdminTestCase):
+    """RB-3: Skye can add and edit event types in the admin."""
+
+    def test_add_and_edit_an_event_type(self):
+        self.client.post(
+            reverse("admin:rulebook_eventtype_add"),
+            {"code": "test_type", "name": "Test type"},
+        )
+        self.assertEqual(EventType.objects.get(code="test_type").name, "Test type")
+        self.client.post(
+            reverse("admin:rulebook_eventtype_change", args=["test_type"]),
+            {"name": "Renamed"},
+        )
+        self.assertEqual(EventType.objects.get(code="test_type").name, "Renamed")
+
+
+class PositionAdminTests(AdminTestCase):
+    """RB-3: a position covers one role, or two roles shared by one person."""
+
+    def setUp(self):
+        super().setUp()
+        for order, code in enumerate(["role_a", "role_b", "role_c"]):
+            MediaRole.objects.create(
+                code=code, name=code, table_column=code, display_order=order
+            )
+
+    def add_position(self, roles):
+        return self.client.post(
+            reverse("admin:rulebook_position_add"),
+            {"code": "test_position", "name": "Test position", "roles": roles},
+        )
+
+    def test_saves_with_one_role(self):
+        self.add_position(["role_a"])
+        position = Position.objects.get(code="test_position")
+        self.assertEqual([r.code for r in position.roles.all()], ["role_a"])
+
+    def test_saves_with_two_roles(self):
+        self.add_position(["role_a", "role_b"])
+        position = Position.objects.get(code="test_position")
+        self.assertEqual(position.roles.count(), 2)
+
+    def test_rejects_no_roles(self):
+        response = self.add_position([])
+        self.assertContains(response, "one or two roles")
+        self.assertFalse(Position.objects.exists())
+
+    def test_rejects_three_roles(self):
+        response = self.add_position(["role_a", "role_b", "role_c"])
+        self.assertContains(response, "one or two roles")
+        self.assertFalse(Position.objects.exists())
