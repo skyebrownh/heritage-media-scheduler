@@ -171,3 +171,10 @@ class SeedTests(TestCase):
         after = (MediaRole.objects.count(), Position.objects.count(), EventType.objects.count())
         self.assertEqual(before, after)
         self.assertEqual(Position.objects.get(code="sound_propresenter").roles.count(), 2)
+
+    def test_running_the_seed_again_keeps_roles_skye_removed_from_a_position(self):
+        position = Position.objects.get(code="sound_propresenter")
+        position.roles.remove("propresenter")
+        migration = importlib.import_module("rulebook.migrations.0002_seed_rulebook_codes")
+        migration.seed(django_apps, None)
+        self.assertEqual([r.code for r in position.roles.all()], ["sound"])

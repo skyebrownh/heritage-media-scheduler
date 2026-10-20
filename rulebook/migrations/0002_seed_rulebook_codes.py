@@ -18,8 +18,8 @@ EVENT_TYPES = [
 
 
 def seed(apps, schema_editor):
-    # get_or_create, so running it twice adds nothing, and a row Skye has already
-    # edited keeps her edits.
+    # RB-3: get_or_create, so running it twice adds nothing. Roles are added only to
+    # a position just created, so a row Skye has already edited keeps her edits.
     MediaRole = apps.get_model("rulebook", "MediaRole")
     Position = apps.get_model("rulebook", "Position")
     EventType = apps.get_model("rulebook", "EventType")
@@ -29,13 +29,15 @@ def seed(apps, schema_editor):
             code=code,
             defaults={"name": name, "table_column": table_column, "display_order": order},
         )
-        position, _ = Position.objects.get_or_create(code=code, defaults={"name": name})
-        position.roles.add(role)
+        position, created = Position.objects.get_or_create(code=code, defaults={"name": name})
+        if created:
+            position.roles.add(role)
 
-    shared, _ = Position.objects.get_or_create(
+    shared, created = Position.objects.get_or_create(
         code="sound_propresenter", defaults={"name": "Sound + ProPresenter"}
     )
-    shared.roles.add(*MediaRole.objects.filter(code__in=["sound", "propresenter"]))
+    if created:
+        shared.roles.add(*MediaRole.objects.filter(code__in=["sound", "propresenter"]))
 
     for code, name in EVENT_TYPES:
         EventType.objects.get_or_create(code=code, defaults={"name": name})
