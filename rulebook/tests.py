@@ -178,3 +178,56 @@ class SeedTests(TestCase):
         migration = importlib.import_module("rulebook.migrations.0002_seed_rulebook_codes")
         migration.seed(django_apps, None)
         self.assertEqual([r.code for r in position.roles.all()], ["sound"])
+
+
+class RemainingAdminBehaviourTests(AdminTestCase):
+    """RB-3: the plan's admin behaviours for event types and positions, not just roles."""
+
+    def setUp(self):
+        super().setUp()
+        for order, code in enumerate(["role_a", "role_b"]):
+            MediaRole.objects.create(
+                code=code, name=code, table_column=code, display_order=order
+            )
+
+    def test_event_type_list_shows_event_types(self):
+        EventType.objects.create(code="test_type", name="Listed type")
+        response = self.client.get(reverse("admin:rulebook_eventtype_changelist"))
+        self.assertContains(response, "Listed type")
+
+    def test_edit_a_position_and_change_its_roles(self):
+        position = Position.objects.create(code="test_position", name="Old")
+        position.roles.add("role_a")
+        self.client.post(
+            reverse("admin:rulebook_position_change", args=["test_position"]),
+            {"name": "New", "roles": ["role_a", "role_b"]},
+        )
+        position.refresh_from_db()
+        self.assertEqual(position.name, "New")
+        self.assertEqual(position.roles.count(), 2)
+
+    def test_code_of_an_existing_event_type_cannot_be_changed(self):
+        EventType.objects.create(code="test_type", name="Type")
+        self.client.post(
+            reverse("admin:rulebook_eventtype_change", args=["test_type"]),
+            {"code": "other_code", "name": "Type"},
+        )
+        self.assertTrue(EventType.objects.filter(code="test_type").exists())
+        self.assertFalse(EventType.objects.filter(code="other_code").exists())
+
+    def test_code_of_an_existing_position_cannot_be_changed(self):
+        position = Position.objects.create(code="test_position", name="Position")
+        position.roles.add("role_a")
+        self.client.post(
+            reverse("admin:rulebook_position_change", args=["test_position"]),
+            {"code": "other_code", "name": "Position", "roles": ["role_a"]},
+        )
+        self.assertTrue(Position.objects.filter(code="test_position").exists())
+        self.assertFalse(Position.objects.filter(code="other_code").exists())
+
+    def test_anonymous_visitor_cannot_reach_event_type_or_position_pages(self):
+        self.client.logout()
+        for name in ["rulebook_eventtype_changelist", "rulebook_position_changelist"]:
+            response = self.client.get(reverse(f"admin:{name}"))
+            self.assertEqual(response.status_code, 302)
+            self.assertIn("/admin/login/", response["Location"])
