@@ -19,7 +19,7 @@ Decides who serves in HICC's monthly media schedule, from Skye's rulebook, roste
 
 ## Architecture
 
-- `config/` is the Django project package (settings, URLs, WSGI). There is no Django app yet; later issues add them.
+- `config/` is the Django project package (settings, URLs, WSGI). `rulebook/` is the Django app for the rulebook (media roles, positions and event types so far; later rulebook issues add to it).
 - `config/settings.py` is the only settings module. Everything comes from environment variables (see `.env.example`), and `DEBUG=false` switches on the production security settings.
 - `/health/` (`config/views.py`) is the only page without a login. It touches no database and returns plain `ok`.
 - `/` redirects to `/admin/`, the only interface.
