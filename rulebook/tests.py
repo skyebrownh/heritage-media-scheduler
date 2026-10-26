@@ -1,10 +1,10 @@
 import importlib
+from datetime import date
 
 from django.apps import apps as django_apps
 from django.contrib.auth.models import User
-from datetime import date
-
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
@@ -472,6 +472,36 @@ class RotationRuleOverlapTests(RotationRuleTestCase):
         self.rule()
         self.post_rule(self.blue, effective_from="2026-03-01")
         self.assertEqual(RotationRule.objects.filter(team=self.blue).count(), 0)
+
+
+class DatabaseConstraintTests(RotationRuleTestCase):
+    """RB-5, RB-7: the database refuses bad rows even when a save skips the form checks."""
+
+    def assertRowRefused(self, **overrides):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.rule(**overrides)
+
+    def test_weekday_outside_0_to_6_is_refused(self):
+        self.assertRowRefused(weekday=7)
+
+    def test_nth_outside_1_to_5_is_refused(self):
+        self.assertRowRefused(nth=6)
+
+    def test_an_end_before_the_start_is_refused(self):
+        self.assertRowRefused(start=date(2026, 6, 1), until=date(2026, 5, 31))
+
+
+class InForceOnTests(RotationRuleTestCase):
+    """RB-7: the shared queryset lookup returns the rows that applied on a date."""
+
+    def test_in_force_on_includes_both_ends_and_excludes_outside(self):
+        old = self.rule(team=self.red, start=date(2026, 1, 1), until=date(2026, 6, 30))
+        new = self.rule(team=self.blue, start=date(2026, 7, 1))
+        in_force = lambda day: list(RotationRule.objects.in_force_on(day).filter(weekday=FRIDAY))
+        self.assertEqual(in_force(date(2025, 12, 31)), [])
+        self.assertEqual(in_force(date(2026, 1, 1)), [old])
+        self.assertEqual(in_force(date(2026, 6, 30)), [old])
+        self.assertEqual(in_force(date(2026, 7, 1)), [new])
 
 
 class TeamOnTests(RotationRuleTestCase):
