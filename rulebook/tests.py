@@ -419,6 +419,36 @@ class RotationRuleAdminTests(RotationRuleTestCase):
             self.red.delete()
 
 
+class RotationRuleListOrderTests(RotationRuleTestCase):
+    """RB-5: the admin list groups by week, then weekday (Sunday first), with ended rules last."""
+
+    def listed(self):
+        response = self.client.get(reverse("admin:rulebook_rotationrule_changelist"))
+        return [
+            (r.nth, r.get_weekday_display(), r.effective_until is not None)
+            for r in response.context["cl"].result_list
+        ]
+
+    def test_current_rules_come_first_by_week_then_weekday_and_ended_rules_last(self):
+        # Ended before the seeded rotation starts, so they are outdated.
+        self.rule(weekday=FRIDAY, nth=1, start=date(2024, 1, 1), until=date(2024, 12, 31))
+        self.rule(weekday=6, nth=1, start=date(2024, 1, 1), until=date(2024, 12, 31))
+        self.assertEqual(
+            self.listed(),
+            [
+                (1, "Sunday", False), (1, "Wednesday", False),
+                (2, "Sunday", False), (2, "Wednesday", False),
+                (3, "Sunday", False), (3, "Wednesday", False),
+                (4, "Sunday", False), (4, "Wednesday", False),
+                (1, "Sunday", True), (1, "Friday", True),
+            ],
+        )
+
+    def test_a_rule_ending_in_the_future_is_still_listed_with_the_current_ones(self):
+        self.rule(weekday=FRIDAY, nth=1, start=date(2026, 1, 1), until=date(2999, 1, 1))
+        self.assertEqual(self.listed()[2], (1, "Friday", True))
+
+
 class RotationRuleOverlapTests(RotationRuleTestCase):
     """RB-7: two rules for one (weekday, nth) never cover the same day."""
 
