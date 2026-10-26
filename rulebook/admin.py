@@ -2,7 +2,7 @@ from django import forms
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
-from rulebook.models import EventType, MediaRole, Position, Team
+from rulebook.models import EventType, MediaRole, Position, RotationRule, Team
 
 
 class CodeReadOnlyOnceSaved(ModelAdmin):
@@ -53,3 +53,15 @@ class PositionAdmin(CodeReadOnlyOnceSaved):
 @admin.register(Team)
 class TeamAdmin(ModelAdmin):
     list_display = ["name", "rotates", "display_order"]
+
+
+@admin.register(RotationRule)
+class RotationRuleAdmin(ModelAdmin):
+    list_display = ["weekday", "nth", "team", "effective_from", "effective_until"]
+    list_filter = ["team"]
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        # RB-5: only a team that rotates can take a turn.
+        if db_field.name == "team":
+            kwargs["queryset"] = Team.objects.filter(rotates=True)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)

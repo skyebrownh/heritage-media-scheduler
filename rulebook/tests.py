@@ -4,11 +4,13 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import User
 from datetime import date
 
+from django.core.exceptions import ValidationError
+from django.db.models import ProtectedError
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from rulebook.dates import nth_in_month, ranges_overlap
-from rulebook.models import EventType, MediaRole, Position, Team
+from rulebook.models import EventType, MediaRole, Position, RotationRule, Team
 
 
 class AdminTestCase(TestCase):
@@ -320,3 +322,218 @@ class TeamSeedTests(TestCase):
                 ("New Members", False, 4),
             ],
         )
+
+
+FRIDAY = 4
+
+
+class RotationRuleTestCase(AdminTestCase):
+    """RB-5: two rotating teams and one non-rotating team, apart from the seeded ones."""
+
+    def setUp(self):
+        super().setUp()
+        self.red = Team.objects.create(name="Red", rotates=True, display_order=10)
+        self.blue = Team.objects.create(name="Blue", rotates=True, display_order=11)
+        self.green = Team.objects.create(name="Green", rotates=False, display_order=12)
+
+    def rule(self, team=None, weekday=FRIDAY, nth=1, start=date(2026, 1, 1), until=None):
+        return RotationRule.objects.create(
+            weekday=weekday, nth=nth, team=team or self.red,
+            effective_from=start, effective_until=until,
+        )
+
+    def post_rule(self, team, **overrides):
+        data = {
+            "weekday": FRIDAY, "nth": 1, "team": team.pk,
+            "effective_from": "2026-01-01", "effective_until": "",
+        }
+        data.update(overrides)
+        return self.client.post(reverse("admin:rulebook_rotationrule_add"), data)
+
+
+class RotationRuleAdminTests(RotationRuleTestCase):
+    """RB-5: Skye can add and edit rotation rules in the admin."""
+
+    def test_add_a_rule_with_an_open_end(self):
+        response = self.post_rule(self.red)
+        self.assertRedirects(response, reverse("admin:rulebook_rotationrule_changelist"))
+        rule = RotationRule.objects.get(team=self.red)
+        self.assertEqual((rule.weekday, rule.nth, rule.effective_until), (FRIDAY, 1, None))
+
+    def test_add_a_rule_with_an_inclusive_end_date(self):
+        self.post_rule(self.red, effective_until="2026-06-30")
+        self.assertEqual(
+            RotationRule.objects.get(team=self.red).effective_until, date(2026, 6, 30)
+        )
+
+    def test_edit_a_rule(self):
+        rule = self.rule()
+        self.client.post(
+            reverse("admin:rulebook_rotationrule_change", args=[rule.pk]),
+            {"weekday": FRIDAY, "nth": 2, "team": self.blue.pk,
+             "effective_from": "2026-01-01", "effective_until": ""},
+        )
+        rule.refresh_from_db()
+        self.assertEqual((rule.nth, rule.team), (2, self.blue))
+
+    def test_list_shows_rules(self):
+        self.rule()
+        response = self.client.get(reverse("admin:rulebook_rotationrule_changelist"))
+        self.assertContains(response, "Red")
+
+    def test_team_dropdown_offers_only_rotating_teams(self):
+        response = self.client.get(reverse("admin:rulebook_rotationrule_add"))
+        self.assertContains(response, "Red")
+        self.assertNotContains(response, "Green")
+
+    def test_a_non_rotating_team_is_refused(self):
+        self.post_rule(self.green)
+        self.assertFalse(RotationRule.objects.filter(team=self.green).exists())
+
+    def test_the_model_refuses_a_non_rotating_team_too(self):
+        rule = RotationRule(
+            weekday=FRIDAY, nth=1, team=self.green, effective_from=date(2026, 1, 1)
+        )
+        with self.assertRaises(ValidationError):
+            rule.full_clean()
+
+    def test_nth_outside_1_to_5_is_refused(self):
+        for nth in (0, 6):
+            with self.subTest(nth=nth):
+                self.post_rule(self.red, nth=nth)
+                self.assertFalse(RotationRule.objects.filter(nth=nth).exists())
+
+    def test_an_end_before_the_start_is_refused(self):
+        self.post_rule(self.red, effective_until="2025-12-31")
+        self.assertFalse(RotationRule.objects.filter(team=self.red).exists())
+
+    def test_anonymous_visitor_is_sent_to_login(self):
+        self.client.logout()
+        response = self.client.get(reverse("admin:rulebook_rotationrule_changelist"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response["Location"])
+
+    def test_a_team_with_rules_cannot_be_deleted(self):
+        self.rule()
+        with self.assertRaises(ProtectedError):
+            self.red.delete()
+
+
+class RotationRuleOverlapTests(RotationRuleTestCase):
+    """RB-7: two rules for one (weekday, nth) never cover the same day."""
+
+    def assertRefused(self, **kwargs):
+        rule = RotationRule(
+            weekday=kwargs.get("weekday", FRIDAY), nth=kwargs.get("nth", 1),
+            team=self.blue, effective_from=kwargs["start"],
+            effective_until=kwargs.get("until"),
+        )
+        with self.assertRaises(ValidationError):
+            rule.full_clean()
+
+    def assertAllowed(self, **kwargs):
+        RotationRule(
+            weekday=kwargs.get("weekday", FRIDAY), nth=kwargs.get("nth", 1),
+            team=self.blue, effective_from=kwargs["start"],
+            effective_until=kwargs.get("until"),
+        ).full_clean()
+
+    def test_overlapping_ranges_are_refused(self):
+        self.rule(start=date(2026, 1, 1), until=date(2026, 6, 30))
+        self.assertRefused(start=date(2026, 6, 1), until=date(2026, 12, 31))
+
+    def test_ranges_touching_on_one_day_are_refused(self):
+        self.rule(start=date(2026, 1, 1), until=date(2026, 6, 30))
+        self.assertRefused(start=date(2026, 6, 30))
+
+    def test_the_day_after_the_old_rule_ends_is_allowed(self):
+        self.rule(start=date(2026, 1, 1), until=date(2026, 6, 30))
+        self.assertAllowed(start=date(2026, 7, 1))
+
+    def test_an_open_ended_old_rule_blocks_any_later_start(self):
+        self.rule(start=date(2026, 1, 1))
+        self.assertRefused(start=date(2030, 1, 1))
+
+    def test_a_new_open_ended_rule_that_starts_before_an_old_one_is_refused(self):
+        self.rule(start=date(2026, 6, 1), until=date(2026, 6, 30))
+        self.assertRefused(start=date(2026, 1, 1))
+
+    def test_a_different_nth_or_weekday_is_allowed(self):
+        self.rule(nth=1)
+        self.assertAllowed(nth=2, start=date(2026, 1, 1))
+        self.assertAllowed(weekday=3, start=date(2026, 1, 1))
+
+    def test_editing_a_rule_does_not_clash_with_itself(self):
+        rule = self.rule()
+        rule.effective_until = date(2026, 12, 31)
+        rule.full_clean()
+
+    def test_the_admin_refuses_an_overlap(self):
+        self.rule()
+        self.post_rule(self.blue, effective_from="2026-03-01")
+        self.assertEqual(RotationRule.objects.filter(team=self.blue).count(), 0)
+
+
+class TeamOnTests(RotationRuleTestCase):
+    """RB-5, RB-7: which team a date had, from the rules in force that day."""
+
+    def test_a_rule_ended_and_replaced_applies_on_each_side_of_the_change(self):
+        self.rule(team=self.red, start=date(2026, 1, 1), until=date(2026, 6, 30))
+        self.rule(team=self.blue, start=date(2026, 7, 1))
+        # 2026-06-05 and 2026-07-03 are both 1st Fridays.
+        self.assertEqual(RotationRule.team_on(date(2026, 6, 5)), self.red)
+        self.assertEqual(RotationRule.team_on(date(2026, 7, 3)), self.blue)
+
+    def test_the_end_date_itself_still_has_the_old_team(self):
+        # 2026-05-01 is a 1st Friday: end the old rule on it and start the new one next day.
+        self.rule(team=self.red, start=date(2026, 1, 1), until=date(2026, 5, 1))
+        self.rule(team=self.blue, start=date(2026, 5, 2))
+        self.assertEqual(RotationRule.team_on(date(2026, 5, 1)), self.red)
+
+    def test_a_date_before_every_rule_has_no_team(self):
+        self.rule(start=date(2026, 1, 1))
+        self.assertIsNone(RotationRule.team_on(date(2025, 12, 5)))
+
+    def test_a_weekday_with_no_rule_has_no_team(self):
+        self.rule(weekday=FRIDAY)
+        # 2026-03-06 is a 1st Friday; 2026-03-05 is a Thursday.
+        self.assertEqual(RotationRule.team_on(date(2026, 3, 6)), self.red)
+        self.assertIsNone(RotationRule.team_on(date(2026, 3, 5)))
+
+
+class RotationSeedTests(TestCase):
+    """RB-5: a data migration adds today's rotation from 2025-08-01."""
+
+    def test_sunday_alternates_alpha_and_omega_and_the_5th_has_none(self):
+        expected = {
+            date(2025, 8, 3): "Alpha", date(2025, 8, 10): "Omega",
+            date(2025, 8, 17): "Alpha", date(2025, 8, 24): "Omega",
+        }
+        for day, name in expected.items():
+            with self.subTest(day=day):
+                self.assertEqual(RotationRule.team_on(day).name, name)
+        self.assertIsNone(RotationRule.team_on(date(2025, 8, 31)))
+
+    def test_wednesday_follows_the_same_pattern(self):
+        self.assertEqual(RotationRule.team_on(date(2025, 8, 6)).name, "Alpha")
+        self.assertEqual(RotationRule.team_on(date(2025, 8, 13)).name, "Omega")
+        self.assertEqual(RotationRule.team_on(date(2025, 8, 20)).name, "Alpha")
+        self.assertEqual(RotationRule.team_on(date(2025, 8, 27)).name, "Omega")
+
+    def test_the_seed_has_eight_open_ended_rules(self):
+        self.assertEqual(RotationRule.objects.count(), 8)
+        self.assertFalse(RotationRule.objects.exclude(effective_until=None).exists())
+
+    def test_a_date_before_the_seed_has_no_team(self):
+        self.assertIsNone(RotationRule.team_on(date(2025, 7, 27)))
+        self.assertIsNone(RotationRule.team_on(date(2025, 7, 30)))
+
+    def test_a_future_first_sunday_is_alpha_and_a_5th_has_none(self):
+        self.assertEqual(RotationRule.team_on(date(2026, 11, 1)).name, "Alpha")
+        self.assertIsNone(RotationRule.team_on(date(2026, 11, 29)))
+
+    def test_running_the_seed_again_adds_nothing(self):
+        migration = importlib.import_module("rulebook.migrations.0006_seed_rotation")
+        migration.seed(django_apps, None)
+        self.assertEqual(RotationRule.objects.count(), 8)
+        self.assertEqual(Team.objects.count(), 4)
