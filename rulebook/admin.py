@@ -2,7 +2,7 @@ from django import forms
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
-from rulebook.models import EventType, MediaRole, Position
+from rulebook.models import EventType, MediaRole, Position, Team
 
 
 class CodeReadOnlyOnceSaved(ModelAdmin):
@@ -48,3 +48,8 @@ class PositionForm(forms.ModelForm):
 class PositionAdmin(CodeReadOnlyOnceSaved):
     form = PositionForm
     list_display = ["name", "code"]
+
+
+@admin.register(Team)
+class TeamAdmin(ModelAdmin):
+    list_display = ["name", "rotates", "display_order"]

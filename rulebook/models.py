@@ -43,3 +43,17 @@ class Position(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Team(models.Model):
+    """RB-4: a group of volunteers. Rotating teams take turns by week."""
+
+    name = models.CharField(max_length=100, unique=True)
+    rotates = models.BooleanField(default=False)
+    display_order = models.PositiveIntegerField()
+
+    class Meta:
+        ordering = ["display_order"]
+
+    def __str__(self):
+        return self.name

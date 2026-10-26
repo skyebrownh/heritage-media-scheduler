@@ -8,7 +8,7 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from rulebook.dates import nth_in_month, ranges_overlap
-from rulebook.models import EventType, MediaRole, Position
+from rulebook.models import EventType, MediaRole, Position, Team
 
 
 class AdminTestCase(TestCase):
@@ -262,3 +262,61 @@ class DateHelperTests(SimpleTestCase):
         a = (date(2026, 1, 1), date(2026, 3, 1))
         b = (date(2026, 2, 1), None)
         self.assertEqual(ranges_overlap(*a, *b), ranges_overlap(*b, *a))
+
+
+class TeamAdminTests(AdminTestCase):
+    """RB-4: Skye can add and edit teams, and say which ones rotate."""
+
+    def test_add_a_team_with_name_rotates_and_order(self):
+        response = self.client.post(
+            reverse("admin:rulebook_team_add"),
+            {"name": "Test team", "rotates": "on", "display_order": 9},
+        )
+        self.assertRedirects(response, reverse("admin:rulebook_team_changelist"))
+        team = Team.objects.get(name="Test team")
+        self.assertEqual((team.rotates, team.display_order), (True, 9))
+
+    def test_edit_a_team(self):
+        team = Team.objects.create(name="Old", rotates=True, display_order=9)
+        self.client.post(
+            reverse("admin:rulebook_team_change", args=[team.pk]),
+            {"name": "New", "display_order": 10},
+        )
+        team.refresh_from_db()
+        # Unticked rotates is saved as False.
+        self.assertEqual((team.name, team.rotates, team.display_order), ("New", False, 10))
+
+    def test_list_shows_teams(self):
+        Team.objects.create(name="Listed team", rotates=False, display_order=9)
+        response = self.client.get(reverse("admin:rulebook_team_changelist"))
+        self.assertContains(response, "Listed team")
+
+    def test_duplicate_name_is_refused(self):
+        Team.objects.create(name="Test team", rotates=False, display_order=9)
+        self.client.post(
+            reverse("admin:rulebook_team_add"),
+            {"name": "Test team", "display_order": 10},
+        )
+        self.assertEqual(Team.objects.filter(name="Test team").count(), 1)
+
+    def test_anonymous_visitor_is_sent_to_login(self):
+        self.client.logout()
+        response = self.client.get(reverse("admin:rulebook_team_changelist"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response["Location"])
+
+
+class TeamSeedTests(TestCase):
+    """RB-4: a data migration adds today's four teams."""
+
+    def test_four_teams_are_seeded_in_order_with_rotation_flags(self):
+        teams = Team.objects.values_list("name", "rotates", "display_order")
+        self.assertEqual(
+            list(teams),
+            [
+                ("Alpha", True, 1),
+                ("Omega", True, 2),
+                ("Wildcards", False, 3),
+                ("New Members", False, 4),
+            ],
+        )
