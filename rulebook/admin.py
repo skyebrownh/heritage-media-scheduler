@@ -1,8 +1,11 @@
 from django import forms
 from django.contrib import admin
+from django.db.models import Case, F, IntegerField, Value, When
+from django.db.models.functions import Mod
+from django.utils import timezone
 from unfold.admin import ModelAdmin
 
-from rulebook.models import EventType, MediaRole, Position
+from rulebook.models import EventType, MediaRole, Position, RotationRule, Team
 
 
 class CodeReadOnlyOnceSaved(ModelAdmin):
@@ -48,3 +51,34 @@ class PositionForm(forms.ModelForm):
 class PositionAdmin(CodeReadOnlyOnceSaved):
     form = PositionForm
     list_display = ["name", "code"]
+
+
+@admin.register(Team)
+class TeamAdmin(ModelAdmin):
+    list_display = ["name", "rotates", "display_order"]
+
+
+@admin.register(RotationRule)
+class RotationRuleAdmin(ModelAdmin):
+    list_display = ["weekday", "nth", "team", "effective_from", "effective_until"]
+    list_filter = ["team"]
+
+    def get_ordering(self, request):
+        # RB-5: current rules first (1st Sun, 1st Wed, 2nd Sun, ...), then ended rules in
+        # the same order. Expressions rather than annotations, because Django applies
+        # this ordering before any annotation added in get_queryset would exist.
+        today = timezone.localdate()  # America/New_York, per TIME_ZONE
+        is_outdated = Case(
+            When(effective_until__lt=today, then=Value(1)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+        # Python's Monday=0 ... Sunday=6, shifted so Sunday sorts first.
+        weekday_sunday_first = Mod(F("weekday") + 1, 7)
+        return [is_outdated.asc(), "nth", weekday_sunday_first.asc(), "effective_from"]
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        # RB-5: only a team that rotates can take a turn.
+        if db_field.name == "team":
+            kwargs["queryset"] = Team.objects.filter(rotates=True)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
