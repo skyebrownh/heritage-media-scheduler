@@ -2,9 +2,12 @@ import importlib
 
 from django.apps import apps as django_apps
 from django.contrib.auth.models import User
-from django.test import TestCase
+from datetime import date
+
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
+from rulebook.dates import nth_in_month, ranges_overlap
 from rulebook.models import EventType, MediaRole, Position
 
 
@@ -231,3 +234,31 @@ class RemainingAdminBehaviourTests(AdminTestCase):
             response = self.client.get(reverse(f"admin:{name}"))
             self.assertEqual(response.status_code, 302)
             self.assertIn("/admin/login/", response["Location"])
+
+
+class DateHelperTests(SimpleTestCase):
+    """RB-5, RB-7: the plain-Python helpers behind every dated rule."""
+
+    def test_nth_in_month_counts_the_weekday_occurrence(self):
+        # 2026-11-01 is the 1st Sunday; 2026-11-29 is the 5th.
+        for day, nth in [(1, 1), (7, 1), (8, 2), (14, 2), (15, 3), (22, 4), (28, 4), (29, 5), (30, 5)]:
+            with self.subTest(day=day):
+                self.assertEqual(nth_in_month(date(2026, 11, day)), nth)
+
+    def test_ranges_overlap_is_inclusive_at_both_ends(self):
+        # Touching on one day (a ends the day b starts) is an overlap.
+        self.assertTrue(ranges_overlap(date(2026, 1, 1), date(2026, 1, 31), date(2026, 1, 31), None))
+        # The day after is not.
+        self.assertFalse(ranges_overlap(date(2026, 1, 1), date(2026, 1, 30), date(2026, 1, 31), None))
+
+    def test_open_ended_range_overlaps_anything_later(self):
+        self.assertTrue(ranges_overlap(date(2025, 8, 1), None, date(2030, 1, 1), date(2030, 2, 1)))
+        self.assertFalse(ranges_overlap(date(2025, 8, 1), None, date(2024, 1, 1), date(2025, 7, 31)))
+
+    def test_two_open_ended_ranges_always_overlap(self):
+        self.assertTrue(ranges_overlap(date(2025, 1, 1), None, date(2030, 1, 1), None))
+
+    def test_ranges_overlap_is_symmetric(self):
+        a = (date(2026, 1, 1), date(2026, 3, 1))
+        b = (date(2026, 2, 1), None)
+        self.assertEqual(ranges_overlap(*a, *b), ranges_overlap(*b, *a))
