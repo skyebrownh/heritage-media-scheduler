@@ -79,11 +79,11 @@ class EffectiveDated(models.Model):
     cover the same day, so a date never has two answers.
     """
 
-    # The fields that say two rows are versions of the same rule, e.g. (weekday, nth).
+    # RB-7: the fields that say two rows are versions of the same rule, e.g. (weekday, nth).
     key_fields = ()
 
     effective_from = models.DateField()
-    # Inclusive. Empty means the rule has no end.
+    # RB-7: inclusive. Empty means the rule has no end.
     effective_until = models.DateField(null=True, blank=True)
 
     objects = EffectiveDatedQuerySet.as_manager()
@@ -100,7 +100,7 @@ class EffectiveDated(models.Model):
 
     def clean(self):
         super().clean()
-        # A missing date or key is already reported by its own field's error.
+        # RB-7: a missing date or key is already reported by its own field's error.
         if self.effective_from is None or any(
             getattr(self, name) is None for name in self.key_fields
         ):
@@ -116,7 +116,7 @@ class EffectiveDated(models.Model):
                 other.effective_from, other.effective_until,
             ):
                 raise ValidationError(
-                    "These dates overlap another rule for the same weekday and week "
+                    "These dates overlap another version of this rule "
                     f"({other.effective_from} to {other.effective_until or 'no end'})."
                 )
 
@@ -133,7 +133,7 @@ class RotationRule(EffectiveDated):
 
     weekday = models.PositiveSmallIntegerField(choices=WEEKDAYS)
     nth = models.PositiveSmallIntegerField(help_text="1 for the first, 2 for the second, and so on.")
-    # PROTECT: deleting a team would silently erase the rules that name it.
+    # RB-5: PROTECT, because deleting a team would silently erase the rules that name it.
     team = models.ForeignKey(Team, on_delete=models.PROTECT, related_name="rotation_rules")
 
     class Meta(EffectiveDated.Meta):
